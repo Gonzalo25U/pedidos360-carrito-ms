@@ -4,6 +4,8 @@ import com.pedidos360.carrito_ms.dto.AgregarItemRequest;
 import com.pedidos360.carrito_ms.dto.ItemCarritoDTO;
 import com.pedidos360.carrito_ms.exception.RecursoNoEncontradoException;
 import com.pedidos360.carrito_ms.model.ItemCarrito;
+import com.pedidos360.carrito_ms.repository.ItemCarritoRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
