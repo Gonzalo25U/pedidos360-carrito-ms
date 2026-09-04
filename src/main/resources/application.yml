@@ -1,0 +1,39 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: carrito-ms
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:carrito_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USER:carrito_app}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      # 'validate': el schema ya lo crea pedidos360-db-ms. Este ms nunca crea/altera tablas.
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+cors:
+  allowed-origins: ${FRONTEND_URL:http://localhost:4200}
+
+logging:
+  level:
+    org.springframework.security: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!local"
+
+azure:
+  client-id: ${AZURE_CLIENT_ID}
+  audience: ${AZURE_API_AUDIENCE:api://${AZURE_CLIENT_ID}}
