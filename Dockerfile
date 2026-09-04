@@ -15,6 +15,8 @@ COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8082
 
+
+
 # Variables de entorno requeridas en runtime (dev y prod tendran valores distintos):
 # AZURE_TENANT_ID, AZURE_CLIENT_ID, FRONTEND_URL, DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
