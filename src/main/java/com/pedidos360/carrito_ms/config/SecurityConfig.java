@@ -1,4 +1,5 @@
 package com.pedidos360.carrito_ms.config;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+
 @Configuration
 @EnableWebSecurity
 @Profile("!local")
@@ -31,6 +33,12 @@ public class SecurityConfig {
 
     @Value("${azure.client-id}")
     private String clientId;
+
+    @Value("${cognito.issuer}")
+    private String cognitoIssuer;
+
+    @Value("${cognito.client-id}")
+    private String cognitoClientId;
 
     @Value("${cors.allowed-origins}")
     private String allowedOrigin;
@@ -47,11 +55,21 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/carrito/**").access((authentication, context) -> {
                     var usuarioAutenticado = authentication.get();
-                   
+
+                    boolean esDeCognito = false;
+                    if (usuarioAutenticado.getPrincipal() instanceof Jwt jwt) {
+                        esDeCognito = jwt.getIssuer() != null
+                                && jwt.getIssuer().toString().equals(cognitoIssuer);
+                    }
+
                     boolean tieneScope = usuarioAutenticado.getAuthorities().stream()
                             .map(GrantedAuthority::getAuthority)
                             .anyMatch(a -> a.equals(SCOPE_CARRITO));
-                    return new AuthorizationDecision(usuarioAutenticado.isAuthenticated() && tieneScope);
+
+                    // Azure: requiere el scope Carrito.ReadWrite. Cognito: basta con
+                    // estar autenticado (no maneja scopes de API personalizados aqui).
+                    boolean autorizado = usuarioAutenticado.isAuthenticated() && (tieneScope || esDeCognito);
+                    return new AuthorizationDecision(autorizado);
                 })
                 .anyRequest().denyAll()
             )
@@ -63,7 +81,7 @@ public class SecurityConfig {
                 .authenticationEntryPoint((request, response, ex) ->
                     response.sendError(401, "No autorizado: token ausente o invalido"))
                 .accessDeniedHandler((request, response, ex) ->
-                    response.sendError(403, "Prohibido: se requiere el scope Carrito.ReadWrite"))
+                    response.sendError(403, "Prohibido: se requiere el scope Carrito.ReadWrite (o un login de Cognito)"))
             );
 
         return http.build();
@@ -71,16 +89,24 @@ public class SecurityConfig {
 
     @Bean
     public JwtDecoder jwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder
+        NimbusJwtDecoder azureDecoder = NimbusJwtDecoder
                 .withJwkSetUri("https://login.microsoftonline.com/common/discovery/v2.0/keys")
                 .build();
+        OAuth2TokenValidator<Jwt> azureValidators = new DelegatingOAuth2TokenValidator<>(
+                new JwtTimestampValidator(),
+                new MultiTenantIssuerValidator(),
+                new AudienceValidator(List.of(expectedAudience, clientId))
+        );
+        azureDecoder.setJwtValidator(azureValidators);
 
-        OAuth2TokenValidator<Jwt> timestampValidator = new JwtTimestampValidator();
-        OAuth2TokenValidator<Jwt> issuerValidator = new MultiTenantIssuerValidator();
-        OAuth2TokenValidator<Jwt> audienceValidator = new AudienceValidator(List.of(expectedAudience, clientId));
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(timestampValidator, issuerValidator, audienceValidator));
+        NimbusJwtDecoder cognitoDecoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(cognitoIssuer);
+        OAuth2TokenValidator<Jwt> cognitoValidators = new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(cognitoIssuer),
+                new CognitoAudienceValidator(cognitoClientId)
+        );
+        cognitoDecoder.setJwtValidator(cognitoValidators);
 
-        return decoder;
+        return new MultiIssuerJwtDecoder(azureDecoder, cognitoDecoder, cognitoIssuer);
     }
 
     @Bean
@@ -92,19 +118,28 @@ public class SecurityConfig {
 
     private Collection<GrantedAuthority> extractAuthorities(Jwt jwt) {
         Collection<GrantedAuthority> authorities = new ArrayList<>();
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles != null) {
-            roles.forEach(role -> authorities.add(new SimpleGrantedAuthority("ROLE_" + role)));
-        }
-        String scopes = jwt.getClaimAsString("scp");
-        if (scopes != null) {
-            for (String scope : scopes.split(" ")) {
-                if (!scope.isBlank()) {
-                    authorities.add(new SimpleGrantedAuthority("SCOPE_" + scope));
-                }
+
+        agregarComoRoles(jwt.getClaimAsStringList("roles"), authorities);
+        agregarComoRoles(jwt.getClaimAsStringList("cognito:groups"), authorities);
+
+        agregarScopes(jwt.getClaimAsString("scp"), authorities);
+        agregarScopes(jwt.getClaimAsString("scope"), authorities);
+
+        return authorities;
+    }
+
+    private void agregarComoRoles(List<String> valores, Collection<GrantedAuthority> authorities) {
+        if (valores == null) return;
+        valores.forEach(v -> authorities.add(new SimpleGrantedAuthority("ROLE_" + v)));
+    }
+
+    private void agregarScopes(String scopesCrudos, Collection<GrantedAuthority> authorities) {
+        if (scopesCrudos == null) return;
+        for (String scope : scopesCrudos.split(" ")) {
+            if (!scope.isBlank()) {
+                authorities.add(new SimpleGrantedAuthority("SCOPE_" + scope));
             }
         }
-        return authorities;
     }
 
     @Bean
