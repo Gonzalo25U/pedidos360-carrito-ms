@@ -5,3 +5,4 @@ Version 1.3.0: Añadiendo los archivos de la carpeta security
 Version 1.4.0: Añadiendo los archivos de configuracion del ms y el application.yml
 Version 1.5.0: Añadiendo Dockerfile
 Version 2.0.0: Implementando de cognito para el registro e inicio de sesión
+Version 2.1.0: Implementando de clicks events para el uso en kafka

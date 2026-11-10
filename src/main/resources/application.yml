@@ -21,14 +21,34 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: 1
+      properties:
+        # Si Kafka esta caido, la peticion HTTP NO debe quedarse colgada: falla rapido
+        # y el evento se descarta (el clickstream es telemetria, no es critico).
+        max.block.ms: 2000
+        delivery.timeout.ms: 5000
+        request.timeout.ms: 3000
+
 cors:
   allowed-origins: ${FRONTEND_URL:http://localhost:4200}
+
+clickstream:
+  topic: ${CLICKSTREAM_TOPIC:clickstream-eventos}
 
 logging:
   level:
     org.springframework.security: INFO
 
 ---
+# Este bloque SOLO se carga cuando el perfil "local" NO esta activo.
+# NOTA: en escenario multi-tenant, el JwtDecoder se construye a mano en
+# SecurityConfig.java usando el endpoint compartido /common, por lo que aqui
+# ya NO se necesita issuer-uri ni AZURE_TENANT_ID.
 spring:
   config:
     activate:
@@ -37,6 +57,7 @@ spring:
 azure:
   client-id: ${AZURE_CLIENT_ID}
   audience: ${AZURE_API_AUDIENCE:api://${AZURE_CLIENT_ID}}
+
 cognito:
   issuer: ${COGNITO_ISSUER:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_A8wOIFdUY}
   client-id: ${COGNITO_CLIENT_ID:58q6l163f3jp5c3lkgnkcav3d3}
