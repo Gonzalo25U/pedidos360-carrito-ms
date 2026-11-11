@@ -12,21 +12,20 @@ import com.pedidos360.carrito_ms.repository.ItemCarritoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
- 
+
 import java.util.List;
- 
 
 @Service
 @RequiredArgsConstructor
 public class CarritoService {
- 
+
     private final ItemCarritoRepository repository;
     private final ClickstreamPublisher clickstream;
- 
+
     public List<ItemCarritoDTO> listar(String usuarioId) {
         return repository.findByUsuarioId(usuarioId).stream().map(this::toDTO).toList();
     }
- 
+
     public ItemCarritoDTO agregar(String usuarioId, AgregarItemRequest request) {
         ItemCarrito item = new ItemCarrito(
                 null,
@@ -49,7 +48,7 @@ public class CarritoService {
                 .build());
         return toDTO(guardado);
     }
- 
+
     @Transactional
     public void eliminar(String usuarioId, Long itemId) {
         ItemCarrito item = repository.findByIdAndUsuarioId(itemId, usuarioId)
@@ -65,7 +64,13 @@ public class CarritoService {
                 .origen("carrito-ms")
                 .build());
     }
- 
+
+    /** Vacia el carrito tras una compra. NO publica ITEM_ELIMINADO: comprar no es descartar. */
+    @Transactional
+    public void vaciar(String usuarioId) {
+        repository.deleteByUsuarioId(usuarioId);
+    }
+
     private ItemCarritoDTO toDTO(ItemCarrito item) {
         return new ItemCarritoDTO(item.getId(), item.getProductoId(), item.getNombreProducto(),
                 item.getCantidad(), item.getPrecioUnitario());

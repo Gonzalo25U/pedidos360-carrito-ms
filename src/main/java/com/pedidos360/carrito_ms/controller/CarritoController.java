@@ -36,4 +36,11 @@ public class CarritoController {
         service.eliminar(usuarioActualProvider.obtenerUsuarioId(), itemId);
         return ResponseEntity.noContent().build();
     }
+
+    /** Vacia el carrito completo del usuario (lo usa la pagina de resultado tras un pago aprobado). */
+    @DeleteMapping
+    public ResponseEntity<Void> vaciar() {
+        service.vaciar(usuarioActualProvider.obtenerUsuarioId());
+        return ResponseEntity.noContent().build();
+    }
 }
